@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "package": "dev.gromclient.visuals.mixin",
+  "refmap": "grom_visuals.refmap.json",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "InGameHudMixin",
+    "TitleScreenMixin",
+    "PressableWidgetMixin",
+    "MouseClickMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
