@@ -23,10 +23,10 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Set up Gradle 8.14.3
+      - name: Set up Gradle 9.2.1 (required by Fabric Loom 1.14)
         uses: gradle/actions/setup-gradle@v6
         with:
-          gradle-version: '8.14.3'
+          gradle-version: '9.2.1'
 
       # Supports both the intended layout (Gradle files at repository root)
       # and the common accidental layout (all project files inside GromVisuals/).
@@ -51,9 +51,12 @@ jobs:
           echo "dir=$project_dir" >> "$GITHUB_OUTPUT"
           echo "Gradle project root: $project_dir"
 
+      - name: Verify Gradle version
+        run: gradle --version
+
       - name: Build remapped mod JAR
         working-directory: ${{ steps.project.outputs.dir }}
-        run: gradle --no-daemon clean build
+        run: gradle --no-daemon clean build --stacktrace
 
       - name: Upload mod JAR
         uses: actions/upload-artifact@v7
