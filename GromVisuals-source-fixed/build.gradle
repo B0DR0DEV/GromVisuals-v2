@@ -1,0 +1,64 @@
+plugins {
+    id 'fabric-loom' version '1.14.10'
+    id 'maven-publish'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = 'GromVisuals-Minecraft-1.21.11'
+}
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://maven.fabricmc.net/' }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+}
+
+
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') {
+        expand 'version': project.version
+    }
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
+    withSourcesJar()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.encoding = 'UTF-8'
+    it.options.release = 21
+}
+
+tasks.withType(AbstractArchiveTask).configureEach {
+    it.preserveFileTimestamps = false
+    it.reproducibleFileOrder = true
+}
+
+// Publish only the remapped JAR as the user-facing build output.
+tasks.named('jar') {
+    archiveClassifier = 'dev'
+}
+
+tasks.named('remapJar') {
+    archiveClassifier = ''
+    archiveFileName = 'GromVisuals-Minecraft-1.21.11-' + project.version + '.jar'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+        }
+    }
+}
