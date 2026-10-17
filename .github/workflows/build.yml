@@ -28,13 +28,37 @@ jobs:
         with:
           gradle-version: '8.14.3'
 
+      # Supports both the intended layout (Gradle files at repository root)
+      # and the common accidental layout (all project files inside GromVisuals/).
+      - name: Locate Gradle project
+        id: project
+        shell: bash
+        run: |
+          set -euo pipefail
+          settings_file="$(find "$GITHUB_WORKSPACE" -maxdepth 5 -type f \( -name 'settings.gradle' -o -name 'settings.gradle.kts' \) -print -quit)"
+          if [[ -z "$settings_file" ]]; then
+            echo '::error::No settings.gradle(.kts) found. Upload the contents of the project ZIP, not only the workflow.'
+            echo 'Repository files:'
+            find "$GITHUB_WORKSPACE" -maxdepth 4 -type f -print | sort
+            exit 1
+          fi
+          project_dir="$(dirname "$settings_file")"
+          if [[ ! -f "$project_dir/build.gradle" && ! -f "$project_dir/build.gradle.kts" ]]; then
+            echo "::error::Found settings file at $project_dir but no build.gradle(.kts) next to it."
+            find "$GITHUB_WORKSPACE" -maxdepth 4 -type f -print | sort
+            exit 1
+          fi
+          echo "dir=$project_dir" >> "$GITHUB_OUTPUT"
+          echo "Gradle project root: $project_dir"
+
       - name: Build remapped mod JAR
+        working-directory: ${{ steps.project.outputs.dir }}
         run: gradle --no-daemon clean build
 
       - name: Upload mod JAR
         uses: actions/upload-artifact@v7
         with:
           name: GromVisuals-1.0.0
-          path: build/libs/GromVisuals-1.0.0.jar
+          path: ${{ steps.project.outputs.dir }}/build/libs/GromVisuals-1.0.0.jar
           if-no-files-found: error
           retention-days: 14
