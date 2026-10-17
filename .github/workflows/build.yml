@@ -23,29 +23,69 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v7
 
+      # Supports both layouts:
+      # 1) build.gradle and gradlew at repository root;
+      # 2) project files nested in a folder (e.g. GromVisuals/).
+      - name: Locate project root
+        id: project
+        shell: bash
+        run: |
+          if [[ -f "./gradlew" && -f "./build.gradle" ]]; then
+            project_dir="."
+          else
+            mapfile -t wrappers < <(find . -mindepth 2 -maxdepth 5 -type f -name gradlew -not -path '*/.git/*' -print | sort)
+            candidates=()
+            for wrapper in "${wrappers[@]}"; do
+              dir="${wrapper%/gradlew}"
+              if [[ -f "$dir/build.gradle" || -f "$dir/build.gradle.kts" ]]; then
+                candidates+=("$dir")
+              fi
+            done
+            if [[ "${#candidates[@]}" -ne 1 ]]; then
+              echo "Could not uniquely locate the Gradle project root. Expected gradlew and build.gradle in the same directory." >&2
+              find . -maxdepth 5 -type f \( -name gradlew -o -name build.gradle -o -name settings.gradle \) -print
+              exit 1
+            fi
+            project_dir="${candidates[0]}"
+          fi
+          project_dir="${project_dir#./}"
+          [[ -n "$project_dir" ]] || project_dir="."
+          echo "dir=$project_dir" >> "$GITHUB_OUTPUT"
+          echo "Detected project root: $project_dir"
+
       - name: Install Java 21
         uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
           cache: gradle
+          cache-dependency-path: |
+            ${{ steps.project.outputs.dir }}/gradle/wrapper/gradle-wrapper.properties
+            ${{ steps.project.outputs.dir }}/gradle.properties
+            ${{ steps.project.outputs.dir }}/build.gradle
 
       - name: Make wrapper executable
+        working-directory: ${{ steps.project.outputs.dir }}
         run: chmod +x ./gradlew
 
       - name: Build mod
+        working-directory: ${{ steps.project.outputs.dir }}
         run: ./gradlew --no-daemon clean build --stacktrace
 
       - name: Select remapped runtime JAR (exclude sources and dev JARs)
         if: success()
         shell: bash
+        env:
+          PROJECT_DIR: ${{ steps.project.outputs.dir }}
+        working-directory: ${{ steps.project.outputs.dir }}
         run: |
           jar_path="$(find build/libs -maxdepth 1 -type f -name 'GromVisuals-Minecraft-1.21.11-*.jar' ! -name '*-sources.jar' ! -name '*-dev.jar' -print -quit)"
           if [[ -z "$jar_path" ]]; then
             echo "No remapped runtime JAR found in build/libs" >&2
             exit 1
           fi
-          echo "MOD_JAR=$jar_path" >> "$GITHUB_ENV"
+          echo "MOD_JAR=$GITHUB_WORKSPACE/$PROJECT_DIR/$jar_path" >> "$GITHUB_ENV"
+          echo "Selected artifact: $jar_path"
 
       - name: Upload distributable mod JAR
         if: success()
@@ -62,9 +102,9 @@ jobs:
         with:
           name: GromVisuals-build-diagnostics
           path: |
-            build/reports/**
-            build/test-results/**
-            **/hs_err_pid*.log
+            ${{ steps.project.outputs.dir }}/build/reports/**
+            ${{ steps.project.outputs.dir }}/build/test-results/**
+            ${{ steps.project.outputs.dir }}/**/hs_err_pid*.log
             ~/.gradle/daemon/*/daemon-*.out.log
           if-no-files-found: warn
           include-hidden-files: true
